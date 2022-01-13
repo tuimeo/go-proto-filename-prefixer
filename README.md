@@ -1,8 +1,8 @@
 # go-proto-filename-prefixer
 
-Add prefix to `name` field of descriptor of **generated protobuf go** files, which allows user to avoid name conflict problem without changing the exisiting proto build struct.
-
 Proto filename conflict problem: https://github.com/golang/protobuf/issues/1122
+
+This is a small tool to quick fix this problem by updating the embedded filename inside the **generated protobuf go** files.
 
 ## How it works
 
@@ -27,11 +27,11 @@ Proto filename conflict problem: https://github.com/golang/protobuf/issues/1122
 You have project struct as followed:
 
 ```
-*project root
+*project root <-- proto include path
    api/    <-- proto files, also generated pb.go files
 ```
 
-You just set the proto include path to the project root, so your generated file will have embeded filename like **api/common.proto**.
+Your generated file will have embeded filename like **api/common.proto**.
 
 Run this command under project root:
 
@@ -40,3 +40,9 @@ go-proto-filename-prefixer api foo/bar/
 ```
 
 Then the embeded filename will become **foo/bar/api/common.proto**, which will help to avoid conflic.
+
+To get verbose output, run with `-v` at the end like this:
+
+```
+go-proto-filename-prefixer api foo/bar/ -v
+```

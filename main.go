@@ -17,6 +17,7 @@ import (
 )
 
 var errNotATargetPbGo = errors.New("not a target pb.go file, just ignore")
+var verboseMode = false
 
 func printUsageExit(msg string) {
 	if msg != "" {
@@ -28,13 +29,17 @@ func printUsageExit(msg string) {
 
 func outputResult(filename string, from string, to string, err error) {
 	if err == nil {
-		color.Green("%v: %v ==> %v", filename, from, to)
+		if verboseMode {
+			color.Green("%v: %v ==> %v", filename, from, to)
+		}
 	} else {
 		if err == errNotATargetPbGo {
-			// just ignore this file, it'okay
-			color.Yellow("%v: %v", filename, err.Error())
+			if verboseMode {
+				// just ignore this file, it'okay
+				color.Yellow("%v: %v", filename, err.Error())
+			}
 		} else {
-			color.Red("%v: %v", filename, err.Error())
+			fmt.Fprintln(os.Stderr, color.RedString("%v: %v", filename, err.Error())) // always output if error to stderr
 		}
 	}
 }
@@ -43,6 +48,10 @@ func main() {
 	// open directory
 	if len(os.Args) < 3 {
 		printUsageExit("Please specify target directory and prefix")
+	}
+
+	if len(os.Args) >= 4 && os.Args[3] == "-v" {
+		verboseMode = true
 	}
 
 	// scan for .pb.go files
