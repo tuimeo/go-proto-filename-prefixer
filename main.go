@@ -147,12 +147,13 @@ func main() {
 	var fileCursor = 0
 	prefixRecord := make(map[string]string)
 	pendingForDep := make(map[string]string)
+	lastFileCount := len(pbFiles)
 
 filescan:
 	for len(pbFiles) > 0 {
 
 		if fileCursor >= len(pbFiles) {
-			if len(pendingForDep) == len(pbFiles) {
+			if lastFileCount == len(pbFiles) {
 				fmt.Fprintln(os.Stderr, color.RedString("Unable to process following files due to missing dependency, which also should be prefixed:"))
 				for f, d := range pendingForDep {
 					fmt.Fprintln(os.Stderr, color.RedString("\t* %v (depends on '%v')", f, d))
@@ -161,6 +162,7 @@ filescan:
 			}
 			fileCursor = 0 // loop from the beginning
 			pendingForDep = make(map[string]string)
+			lastFileCount = len(pbFiles)
 		}
 		pbf := pbFiles[fileCursor]
 
