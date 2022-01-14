@@ -102,7 +102,7 @@ func patchGrpcFile(pbFile string, from string, to string) {
 			f.WriteString(fmt.Sprintf("\tMetadata: \"%v\",\n", to))
 
 			for idx, l := range lines[metadataLineNum+1:] {
-				if idx != len(lines)-metadataLineNum-1 {
+				if idx != len(lines)-metadataLineNum-2 {
 					f.WriteString(l + "\n")
 				} else {
 					f.WriteString(l)
