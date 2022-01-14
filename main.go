@@ -19,6 +19,9 @@ import (
 var errNotATargetPbGo = errors.New("not a target pb.go file, just ignore")
 var verboseMode = false
 
+//Metadata: "api/wechatwork_internal.proto",
+var grpcMetadataLineMatcher = regexp.MustCompile(`Metadata:\s+"(\S+)",`)
+
 func printUsageExit(msg string) {
 	if msg != "" {
 		fmt.Fprintln(os.Stderr, "Error: "+msg)
@@ -50,6 +53,61 @@ func outputResult(filename string, from string, to string, err error) {
 			}
 		} else {
 			fmt.Fprintln(os.Stderr, color.RedString("%v: %v", filename, err.Error())) // always output if error to stderr
+		}
+	}
+}
+
+func patchGrpcFile(pbFile string, from string, to string) {
+	// pbFile: xxxxx.pb.go, find xxxxx_grpc.pb.go
+	name := strings.TrimSuffix(pbFile, ".pb.go")
+	grpcFileName := fmt.Sprintf("%v_grpc.pb.go", name)
+
+	fileContent, err := os.ReadFile(grpcFileName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return
+		} else {
+			outputResult(grpcFileName, "", "", err)
+			return
+		}
+	}
+	lines := strings.Split(string(fileContent), "\n")
+	metadataLineNum := 0
+	metadataVal := ""
+	for idx, l := range lines {
+		if m := grpcMetadataLineMatcher.FindStringSubmatch(l); m != nil {
+			metadataLineNum = idx
+			metadataVal = m[1]
+			break
+		}
+	}
+
+	if metadataLineNum == 0 {
+		// seems not a valid grpc file
+		outputResult(grpcFileName, "", "", fmt.Errorf("unrecognized _grpc.pb.go format"))
+		return
+	} else {
+		if metadataVal != from {
+			outputResult(grpcFileName, "", "", fmt.Errorf("unexpected metadata value"))
+			return
+		} else {
+			f, err := os.Create(grpcFileName)
+			if err != nil {
+				outputResult(grpcFileName, "", "", err)
+			}
+			for _, l := range lines[0:metadataLineNum] {
+				f.WriteString(l + "\n")
+			}
+
+			f.WriteString(fmt.Sprintf("\tMetadata: \"%v\",\n", to))
+
+			for idx, l := range lines[metadataLineNum+1:] {
+				if idx != len(lines)-metadataLineNum-1 {
+					f.WriteString(l + "\n")
+				} else {
+					f.WriteString(l)
+				}
+			}
 		}
 	}
 }
@@ -88,12 +146,21 @@ func main() {
 	var fileDescDataStartMatcher *regexp.Regexp
 	var fileCursor = 0
 	prefixRecord := make(map[string]string)
+	pendingForDep := make(map[string]string)
 
 filescan:
 	for len(pbFiles) > 0 {
 
 		if fileCursor >= len(pbFiles) {
+			if len(pendingForDep) == len(pbFiles) {
+				fmt.Fprintln(os.Stderr, color.RedString("Unable to process following files due to missing dependency, which also should be prefixed:"))
+				for f, d := range pendingForDep {
+					fmt.Fprintln(os.Stderr, color.RedString("\t* %v (depends on '%v')", f, d))
+				}
+				os.Exit(-1)
+			}
 			fileCursor = 0 // loop from the beginning
+			pendingForDep = make(map[string]string)
 		}
 		pbf := pbFiles[fileCursor]
 
@@ -213,6 +280,7 @@ filescan:
 						color.Yellow("%v: Dependency '%v' unprocessed, work later", pbf, pd)
 					}
 					fileCursor++
+					pendingForDep[pbf] = pd
 					continue filescan
 				} else {
 					fdp.Dependency[idx] = depPrefixedTo
@@ -277,6 +345,8 @@ filescan:
 		prefixRecord[fromFilename] = toFilename
 		outputResult(pbf, fromFilename, toFilename, nil)
 		removeFilleByIndex(&pbFiles, fileCursor)
+
+		patchGrpcFile(pbf, fromFilename, toFilename)
 	}
 
 }

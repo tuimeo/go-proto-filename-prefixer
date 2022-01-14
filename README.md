@@ -8,8 +8,9 @@ This is a small tool to quick fix this problem by updating the embedded filename
 
 1. Scan the specified directory for any '*.pb.go' files whichs looks like a generated proto file.
 2. Parse the `raw desc` part of the file, convert the hex back to [FileDescriptorProto](https://github.com/protocolbuffers/protobuf/blob/master/src/google/protobuf/descriptor.proto)
-3. Prepend the specified string to `name` field.
+3. Prepend the specified string to `name` field, update any `dependency` field that point to other proto under the target directory.
 4. Marshal to hex string and replace back to the `pb.go` file, also update header information.
+5. Check if there is any 'XXX_grpc.pb.go' file, if yes, update the `Metadata` line field.
 
 ## Usage
 
@@ -52,5 +53,5 @@ go-proto-filename-prefixer api foo/bar/ -v
 If you want to inspect the embedded information:
 
 1. Open the `pb.go` file, locate to the hex part. Copy just the hex part.
-2. Run `cat  | tr ',' ' ' | sed 's/0x//g'`, paste, ctrl+d. Then copy the output again. This step just prepare the data
+2. Run `read -d '!' -s desc; echo $desc | tr '\t,\n' '   ' | sed 's/0x//g' | sed 's/ //g'; unset desc`, paste in, press "!". Then copy the output again. This step just prepare the data for decoder.
 3. Goto https://protobuf-decoder.netlify.app/, paste in.
