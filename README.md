@@ -54,4 +54,4 @@ If you want to inspect the embedded information:
 
 1. Open the `pb.go` file, locate to the hex part. Copy just the hex part.
 2. Run `read -d '!' -s desc; echo $desc | tr '\t,\n' '   ' | sed 's/0x//g' | sed 's/ //g'; unset desc`, paste in, press "!". Then copy the output again. This step just prepare the data for decoder.
-3. Goto https://protobuf-decoder.netlify.app/, paste in.
+3. Goto https://protobuf-decoder.netlify.app/ , paste in.
