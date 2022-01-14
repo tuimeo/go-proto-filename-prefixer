@@ -46,3 +46,11 @@ To get verbose output, run with `-v` at the end like this:
 ```
 go-proto-filename-prefixer api foo/bar/ -v
 ```
+
+## Misc
+
+If you want to inspect the embedded information:
+
+1. Open the `pb.go` file, locate to the hex part. Copy just the hex part.
+2. Run `cat  | tr ',' ' ' | sed 's/0x//g'`, paste, ctrl+d. Then copy the output again. This step just prepare the data
+3. Goto https://protobuf-decoder.netlify.app/, paste in.

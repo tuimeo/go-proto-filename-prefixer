@@ -27,6 +27,16 @@ func printUsageExit(msg string) {
 	os.Exit(-1)
 }
 
+func removeFilleByIndex(s *[]string, index int) {
+	*s = append((*s)[:index], (*s)[index+1:]...)
+}
+
+func firstDir(name string) string {
+	protoDir := filepath.Dir(name)
+	dirs := strings.Split(protoDir, string(filepath.Separator))
+	return dirs[0]
+}
+
 func outputResult(filename string, from string, to string, err error) {
 	if err == nil {
 		if verboseMode {
@@ -76,12 +86,24 @@ func main() {
 	sourceHeaderLineMatcher := regexp.MustCompile(`^//\s+source:\s+(.+\.proto)$`)
 	fileDescLineMatcher := regexp.MustCompile(`^var\s+(\w+)\s+protoreflect.FileDescriptor$`)
 	var fileDescDataStartMatcher *regexp.Regexp
+	var fileCursor = 0
+	prefixRecord := make(map[string]string)
 
 filescan:
-	for _, pbf := range pbFiles {
+	for len(pbFiles) > 0 {
+
+		if fileCursor >= len(pbFiles) {
+			fileCursor = 0 // loop from the beginning
+		}
+		pbf := pbFiles[fileCursor]
+
 		fileContent, err := os.ReadFile(pbf)
 		if err != nil {
 			outputResult(pbf, "", "", err)
+
+			// can't read current file, have to ignore
+			removeFilleByIndex(&pbFiles, fileCursor)
+			continue
 		}
 
 		lines := strings.Split(string(fileContent), "\n")
@@ -98,6 +120,7 @@ filescan:
 
 					if strings.Contains(lines[idx+1], "prefixed by go-proto-filename-prefixer") {
 						outputResult(pbf, "", "", fmt.Errorf("alreay prefixed"))
+						removeFilleByIndex(&pbFiles, fileCursor)
 						continue filescan
 					}
 					continue
@@ -145,6 +168,7 @@ filescan:
 					d, err := hex.DecodeString(h[2:])
 					if err != nil {
 						outputResult(pbf, "", "", fmt.Errorf("invalid hex data -- %v, %v", h[2:], err))
+						removeFilleByIndex(&pbFiles, fileCursor)
 						continue filescan
 					}
 					fileDescPbRaw.Write(d)
@@ -154,11 +178,13 @@ filescan:
 
 		if pendingForData {
 			outputResult(pbf, "", "", fmt.Errorf("uncompleted data"))
+			removeFilleByIndex(&pbFiles, fileCursor)
 			continue
 		}
 
 		if dataEndLine == 0 || dataBeginLine == 0 {
 			outputResult(pbf, "", "", errNotATargetPbGo)
+			removeFilleByIndex(&pbFiles, fileCursor)
 			continue
 		}
 
@@ -167,7 +193,31 @@ filescan:
 		err = proto.Unmarshal(fileDescPbRaw.Bytes(), fdp)
 		if err != nil {
 			outputResult(pbf, "", "", err)
+			removeFilleByIndex(&pbFiles, fileCursor)
 			continue
+		}
+
+		// get the first "dir" of this file, protos are in root, it will be "."
+		fd := firstDir(*fdp.Name)
+
+		// check if there is any dependency under the same "dir"
+		for idx, pd := range fdp.Dependency {
+			dfd := firstDir(pd)
+
+			if dfd == fd {
+				// if yes, and check if these dependecy had been processed
+				// we can't directly prefix the dependency proto under same dir unless it really exists
+				if depPrefixedTo, ok := prefixRecord[pd]; !ok {
+					// if not processed, just ignore this file this time
+					if verboseMode {
+						color.Yellow("%v: Dependency '%v' unprocessed, work later", pbf, pd)
+					}
+					fileCursor++
+					continue filescan
+				} else {
+					fdp.Dependency[idx] = depPrefixedTo
+				}
+			}
 		}
 
 		// prepend prefix
@@ -178,6 +228,7 @@ filescan:
 		b, err := proto.Marshal(fdp)
 		if err != nil {
 			outputResult(pbf, "", "", err)
+			removeFilleByIndex(&pbFiles, fileCursor)
 			continue
 		}
 
@@ -185,6 +236,7 @@ filescan:
 		f, err := os.Create(pbf)
 		if err != nil {
 			outputResult(pbf, "", "", err)
+			removeFilleByIndex(&pbFiles, fileCursor)
 			continue
 		}
 
@@ -221,7 +273,10 @@ filescan:
 		}
 
 		f.Close()
+
+		prefixRecord[fromFilename] = toFilename
 		outputResult(pbf, fromFilename, toFilename, nil)
+		removeFilleByIndex(&pbFiles, fileCursor)
 	}
 
 }
